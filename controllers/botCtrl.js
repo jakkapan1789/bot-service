@@ -27,10 +27,53 @@ async function searcher(req, res) {
 }
 
 let conversationHistory = [];
+function detectEnglishMessage(message) {
+  const englishRegex = /^[a-zA-Z0-9 .,!?]+$/;
+  return englishRegex.test(message);
+}
+
+function detectUnclearQuestion(message) {
+  if (!detectEnglishMessage(message)) {
+    return false;
+  }
+  const questionWords = ["who", "what", "when", "where", "why", "how"];
+  const tokens = message.toLowerCase().split(" ");
+  const hasQuestionWord = questionWords.some((word) => tokens.includes(word));
+  const endsWithQuestionMark = message.trim().endsWith("?");
+  const isShortMessage = tokens.length < 10;
+  const containsSingleWord = tokens.length === 1;
+  const isWhoNameQuery =
+    tokens.length === 3 && tokens[0] === "who" && tokens[1] === "name";
+  return (
+    hasQuestionWord &&
+    !endsWithQuestionMark &&
+    isShortMessage &&
+    containsSingleWord &&
+    !isWhoNameQuery
+  );
+}
+
+function handleUnclearQuestion(message) {
+  if (detectUnclearQuestion(message)) {
+    return [
+      "I'm sorry, but I'm not quite sure I understand your question. Could you please provide more details or rephrase it?",
+      "To better assist you, could you give me a bit more information about what you're trying to achieve or what you're looking for?",
+    ];
+  }
+  return null;
+}
+
 function findBestAnswer(message) {
+  if (!detectEnglishMessage(message)) {
+    return "I'm sorry, but I only support English language. Could you please rephrase your message in English?";
+  }
   const tokenizer = new natural.WordTokenizer();
   const tokens = tokenizer.tokenize(message.toLowerCase());
   conversationHistory.push(message.toLowerCase());
+  const clarifyingResponse = handleUnclearQuestion(message);
+  if (clarifyingResponse) {
+    return clarifyingResponse;
+  }
   let bestMatch = null;
   let bestScore = -1;
   for (const key in sampleResponses) {
@@ -47,58 +90,5 @@ function findBestAnswer(message) {
 
   return bestMatch;
 }
-
-// Initialize conversation history
-
-// let conversationHistory = [];
-
-// function findBestAnswer(message) {
-//   const tokenizer = new natural.WordTokenizer();
-//   const tokens = tokenizer.tokenize(message.toLowerCase());
-//   let bestMatch = null;
-//   let bestScore = -1;
-
-//   // Check if the message is one of the sample responses
-//   if (sampleResponses.hasOwnProperty(message)) {
-//     return sampleResponses[message];
-//   }
-
-//   // Add current message to conversation history
-//   conversationHistory.push(message.toLowerCase());
-
-//   // Iterate through sample responses to find the best match
-//   for (const key in sampleResponses) {
-//     const responseTokens = tokenizer.tokenize(key.toLowerCase());
-//     const score = natural.JaroWinklerDistance(
-//       tokens.join(" "),
-//       responseTokens.join(" ")
-//     );
-//     if (score > bestScore) {
-//       bestScore = score;
-//       bestMatch = sampleResponses[key];
-//     }
-//   }
-
-//   // Merge first question with subsequent questions for finding the best match
-//   const mergedQuestions = conversationHistory.join(" ");
-
-//   // Check if there is context in merged question
-//   if (mergedQuestions.length > 0) {
-//     // Iterate through sample responses again with merged question
-//     for (const key in sampleResponses) {
-//       const responseTokens = tokenizer.tokenize(key.toLowerCase());
-//       const score = natural.JaroWinklerDistance(
-//         mergedQuestions,
-//         responseTokens.join(" ")
-//       );
-//       if (score > bestScore) {
-//         bestScore = score;
-//         bestMatch = sampleResponses[key];
-//       }
-//     }
-//   }
-
-//   return bestMatch;
-// }
 
 module.exports = { getBestMatchedResponse, searcher };
